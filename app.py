@@ -6,6 +6,7 @@ import io
 import base64
 import matplotlib.pyplot as plt
 from plotly import io as pio
+import plotly.figure_factory as ff
 
 
 df = pd.read_csv('static/iraste_nxt_cas.csv')
@@ -40,56 +41,79 @@ def clear_cards(q, ignore: Optional[List[str]] = []) -> None:
 async def page_intro(q: Q):
     q.page['sidebar'].value = '#intro'
     clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
-    add_card(q, 'article', ui.tall_article_preview_card(
-        box=ui.box('vertical', height='1000px'), title='Spatial Analysis',
-        image='https://i.ibb.co/fYDMvzw/Screenshot-2024-03-17-at-12-05-30-AM.png',
-        content='''
-Data Analysis of Traffic in Busy Roads connecting south indian cities.
-        '''
-    ))
+    # Create a heatmap of alert occurrences
+    fig = px.density_mapbox(df, lat='Lat', lon='Long', radius=10, zoom=5, mapbox_style='carto-positron',
+                        title='Spatial Distribution of Alert Occurrences')
 
+# Update map layout
+    fig.update_layout(mapbox_center={'lat': df['Lat'].mean(), 'lon': df['Long'].mean()})
+    
+
+    config = {
+        'scrollZoom': True,
+        'showLink': False,
+        'displayModeBar': False
+    }
+    html = pio.to_html(fig, validate=False, include_plotlyjs='cdn', config=config)
+    add_card(q, 'spatia1', ui.form_card(box=ui.box('vertical', width='1500px'), title='', items=[
+        ui.frame(content=html, height='1000px', width='1300px')]))
+    
 @on('#data-frame-analysis')
 async def page_df(q: Q):
     q.page['sidebar'].value = '#data-frame-analysis'
-    # When routing, drop all the cards except of the main ones (header, sidebar, meta).
-    # Since this page is interactive, we want to update its card
-    # instead of recreating it every time, so ignore 'form' card on drop.
     clear_cards(q)
+    
+    # Add description dictionary
+    descriptions = {
+        'cas_ldw': "Lane Departure Warning (LDW) - A system that alerts the driver when the vehicle is unintentionally drifting out of its lane without a turn signal.",
+        'cas_hmw': "Headway Monitoring and Warning (HMW) - A system that monitors the distance between the driver's vehicle and the vehicle in front and alerts the driver if the distance becomes dangerously short.",
+        'hard_brake': "Hard Brake - An event recorded when the driver applies the brakes abruptly and significantly, often indicating an emergency or sudden deceleration.",
+        'cas_pcw': "Pedestrian Collision Warning (PCW) - A system that detects pedestrians in the vehicle's path and alerts the driver to avoid collisions.",
+        'cas_fcw': "Forward Collision Warning (FCW) - A system that detects vehicles or obstacles in the vehicle's path and alerts the driver to potential collisions.",
+        'dms_distracted': "Driver Monitoring System (DMS) - Distracted - An event recorded when the driver is distracted, such as by using a mobile phone or engaging in other activities instead of focusing on driving.",
+        'dms_noseatbelt': "Driver Monitoring System (DMS) - No Seatbelt - An event recorded when the driver is not wearing a seatbelt.",
+        'dms_smoking': "Driver Monitoring System (DMS) - Smoking - An event recorded when the driver is smoking while driving."
+    }
+    
     table_rows = []
-    df['Speed'] = df['Speed'].astype(str)
-    for index, row in df.iterrows():
+    df_temp = df.copy()
+    df_temp['Date'] = df_temp['Date'].astype(str)  # Convert datetime to string for display
+    df_temp['Speed'] = df_temp['Speed'].astype(str)  # Convert speed to string for display
+    for index, row in df_temp.iterrows():
         if index == 10000:
             break
         table_rows.append(ui.table_row(
             name=row['Date'],
-            cells=[row['Date'], row['Alert'],row['Speed']]  # Adjust these indices based on your CSV columns
+            cells=[row['Date'], row['Alert'], descriptions.get(row['Alert'], ''), row['Speed']]  # Adjust these indices based on your CSV columns
         ))
+        
     add_card(q, 'table', ui.form_card(box='vertical', items=[ui.table(
         name='table',
         downloadable=True,
         resettable=True,
         groupable=True,
         columns=[
-            ui.table_column(name='Date', label='Date', searchable=True,min_width='500'),
-            ui.table_column(name='Alert', label='Alert', filterable=True, min_width='500',cell_type=ui.tag_table_cell_type(name='tags', tags=[
-                    ui.tag(label='RUNNING', color='#D2E3F8'),
-                    ui.tag(label='DONE', color='$red'),
-                    ui.tag(label='SUCCESS', color='$mint'),
-                    ]
-                )),
-            ui.table_column(name='Speed', label='Speed', searchable=True,min_width='500'),
+            ui.table_column(name='Date', label='Date', searchable=True, min_width='200'),
+            ui.table_column(name='Alert', label='Alert', filterable=True, min_width='200', cell_type=ui.tag_table_cell_type(name='tags', tags=[
+                ui.tag(label='RUNNING', color='#D2E3F8'),
+                ui.tag(label='DONE', color='$red'),
+                ui.tag(label='SUCCESS', color='$mint'),
+            ])),
+            ui.table_column(name='Description', label='Description', searchable=True, min_width='800'),
+            ui.table_column(name='Speed', label='Speed', searchable=True, min_width='200'),
         ],
-        events = ['click'],
-        rows=table_rows)
-    ]))
+        events=[''],
+        rows=table_rows)]
+    ))
+
 
 @on('table')
 async def handle_table_click(q: Q):
     table_rows = []
     for index, row in df.iterrows():
         table_rows.append(ui.table_row(
-            name=row['title'],
-            cells=[row['title'], row['News source'],]  # Adjust these indices based on your CSV columns
+            name=row['Date'],
+            cells=[row['Date'], row['Alert'], row['Speed']]  # Adjust these indices based on your CSV columns
         ))
     print(q.args.table)
     if q.args.table:
@@ -139,126 +163,106 @@ async def pageca(q: Q):
         ui.frame(content=html, height='650px', width='1300px')]))
    
 
-@on('#industry-sector-sentiment-analysis')
+@on('#speed-analysis')
 async def page_ind(q: Q):
-    q.page['sidebar'].value = '#industry-sector-sentiment-analysis'
-    clear_cards(q)  # When routting, drop all the cards except of the main ones (header, sidebar, meta).
-    '''
-    add_card( q, 'dataframe', ui.form_card(box='zone2', items=[
-        # modify heading here (content)
-        ui.text_xl(content='Data Frame Head'),
-        ui.table(
-            name='table',
-            columns=[ui.table_column(name=i, label=i, min_width='200',cell_type=ui.markdown_table_cell_type(target='_blank')) for i in df.columns],
-            height='400px',
-            rows=[ui.table_row(name=f'row{i}', cells=list(str(i) for i in df.values[i])) for i in range(100)],
-        )
-    ]))
-    '''
-    # Identify the top 10 industry sectors with positive sentiment
-    # Assuming you have a 'Sentiment' column in your DataFrame
-    positive_rows = df[df['Sentiment'].str.lower().str.contains('positive')]
+    q.page['sidebar'].value = '#speed-analysis'
+    clear_cards(q)
     
-
-    # Extract the top 10 industry sectors with positive sentiment
+    # Convert 'Speed' column to float
+    df['Speed'] = df['Speed'].astype(float)
     
-    # Assuming you already have 'positive_rows' DataFrame
-    # Extract the top 10 industry sectors with positive sentiment
-    positive_industries = positive_rows['Industry sector'].value_counts().head(10)
-    positive_industries = positive_industries[1:]
-
-    # Create a pie chart using plotly express
-    fig = px.pie(positive_industries, 
-             names=positive_industries.index, 
-             values=positive_industries.values, 
-             title='Top 10 Industry Sectors with Positive Sentiment')
-    config = {
-        'scrollZoom': False,
-        'showLink': False,
-        'displayModeBar': False
-    }
-    html = pio.to_html(fig, validate=False, include_plotlyjs='cdn', config=config)
-    add_card(q, 'piechart1', ui.frame_card(box='horizontal', title='', content=html))
-    # Identify the top 10 industry sectors with negative sentiment
-    # Assuming you have a 'Sentiment' column in your DataFrame
-    negative_rows = df[df['Sentiment'].str.lower().str.contains('negative')]
-    # Extract the top 10 industry sectors with negative sentiment
-    negative_industries = negative_rows['Industry sector'].value_counts().head(10)
-    add_card(q, 'dataframe3', ui.form_card(box='horizontal', items=[
-        ui.text_xl(content='Top 10 Industry Sectors with Most Negative Sentiment'),
-        ui.table(
-            name='negative_table',
-            columns=[
-                ui.table_column(name='Industry Sector', label='Industry Sector', min_width='200'),
-                ui.table_column(name='Count', label='Negative Sentimental NewsCount', min_width='200')
-            ],
-            rows=[ui.table_row(name = f'count{count}',cells=[sector , str(count)]) for sector, count in negative_industries.items() if sector != '0'],
-            height='400px',
-        )
-    ]))
-    positive_news_source = positive_rows['News source'].value_counts().head(13)
-    del positive_news_source['0']
-    del positive_news_source['Not mentioned']
-    del positive_news_source['Not specified.']
-    fig = px.pie(positive_news_source,
-                 names = positive_news_source.index,
-                 values = positive_news_source.values,
-                 title = 'Top 10 Positive News Sources')
-    config = {
-        'scrollZoom': False,
-        'showLink': False,
-        'displayModeBar': False
-    }
-    html = pio.to_html(fig, validate=False, include_plotlyjs='cdn', config=config)
-    add_card(q, 'piechart2', ui.frame_card(box='zone1', title='', content=html))
+    # Sort DataFrame by 'Time'
+    df_sorted = df.sort_values(by='Time')
+    df_sorted['Time'] = pd.to_datetime(df_sorted['Time'], errors='coerce')
     
-
-    negative_news_source = negative_rows['News source'].value_counts().head(10)
-    add_card(q, 'datafram2', ui.form_card(box='zone1', items=[
-        ui.text_xl(content='Top 10 Negative News Sources'),
-        ui.table(
-            name='negative_table_News_source',
-            columns=[
-                ui.table_column(name='Industry Sector', label='Industry Sector', min_width='200'),
-                ui.table_column(name='Count', label='Negative Sentimental NewsCount', min_width='200')
-            ],
-            rows=[ui.table_row(name = f'count{count}',cells=[sector , str(count)]) for sector, count in negative_news_source.items() if sector != '0'],
-            height='400px'
-        )
+    # Create a new column for speed category
+    def categorize_speed(speed):
+        if speed < 60:
+            return 'Low'
+        elif 60 <= speed < 80:
+            return 'Medium'
+        else:
+            return 'High'
+    
+    df_sorted['Speed_Category'] = df_sorted['Speed'].apply(categorize_speed)
+    
+    # Scatter plot of Speed vs. Time with Alert Events
+    fig1 = px.scatter(df_sorted, x='Time', y='Speed', color='Alert', title='Speed vs. Time with Alert Events')
+    fig1.update_layout(xaxis_title='Time', yaxis_title='Speed')
+    
+    # Convert plot to HTML
+    html1 = pio.to_html(fig1, validate=False, include_plotlyjs='cdn', config={'scrollZoom': False, 'showLink': False, 'displayModeBar': False})
+    
+    # Add the plot to a card
+    add_card(q, 'speed1', ui.form_card(box=ui.box('vertical', width='1500px'), title='', items=[
+        ui.frame(content=html1, height='650px', width='1500px')
     ]))
     
+    # Histogram of Speed Distribution
+    fig2 = px.histogram(df_sorted, x='Speed', nbins=20, title='Distribution of Speed')
+    fig2.update_layout(xaxis_title='Speed', yaxis_title='Frequency')
+    
+    # Convert plot to HTML
+    html2 = pio.to_html(fig2, validate=False, include_plotlyjs='cdn', config={'scrollZoom': False, 'showLink': False, 'displayModeBar': False})
+    
+    # Add the plot to a card
+    add_card(q, 'speed2', ui.form_card(box=ui.box('vertical', width='1500px'), title='', items=[
+        ui.frame(content=html2, height='650px', width='1500px')
+    ]))
+    grouped_data = df_sorted.groupby(['Speed_Category', 'Alert']).size().reset_index(name='Count')
+    
+    # Create grouped bar plot
+    fig3 = px.bar(grouped_data, x='Speed_Category', y='Count', color='Alert', barmode='group',
+                  title='Alerts Count by Speed Category')
+    fig3.update_layout(xaxis_title='Speed Category', yaxis_title='Count')
+    
+    # Convert plot to HTML
+    html3 = pio.to_html(fig3, validate=False, include_plotlyjs='cdn', config={'scrollZoom': False, 'showLink': False, 'displayModeBar': False})
+    
+    # Add the plot to a card
+    add_card(q, 'speed3', ui.form_card(box=ui.box('vertical', width='1500px'), title='', items=[
+        ui.frame(content=html3, height='650px', width='1500px')
+    ]))
 
+    
 
-@on('#temporal-analysis')
+    
+
+@on('#correlation-analysis')
 async def page_temporal(q: Q):
-    q.page['sidebar'].value = '#temporal-analysis'
+    q.page['sidebar'].value = '#correlation-analysis'
     clear_cards(q)  # When routing, drop all the cards except of the main ones (header, sidebar, meta).
     
-    # Create a histogram using Plotly for temporal distribution
-    fig_temporal = px.histogram(df, x='date', nbins=30, labels={'date': 'Date', 'count': 'Number of Articles'})
-    fig_temporal.update_layout(title='Temporal Distribution of Articles', xaxis_title='Date', yaxis_title='Number of Articles')
-    config_temporal = {
+    df1 = df.copy()
+    
+    df1['Alert'] = df1['Alert'].astype('category').cat.codes
+    df1['Date'] = pd.to_datetime(df1['Date'])
+    df1['DayOfWeek'] = df1['Date'].dt.day_name()
+    df1['HourOfDay'] = df1['Date'].dt.hour
+    df1['Date'] = df1['Date'].astype('category').cat.codes
+    df1['Time'] = pd.to_datetime(df1['Time'], errors='coerce')
+    df1['DayOfWeek'] = df1['DayOfWeek'].astype('category').cat.codes
+    df1['HourOfDay'] = df1['HourOfDay'].astype('category').cat.codes
+    df1.drop(['HourOfDay'], axis=1, inplace=True)
+
+    correlation_matrix = df1.corr()
+
+    # Create a heatmap of the correlation matrix
+    fig2 = ff.create_annotated_heatmap(z=correlation_matrix.values,
+    x=list(correlation_matrix.columns),
+    y=list(correlation_matrix.index),
+    colorscale='Viridis')
+
+    # Update plot layout
+    fig2.update_layout(title='Correlation Between Alert Occurrence and Road Conditions')
+    config = {
         'scrollZoom': False,
         'showLink': False,
         'displayModeBar': False
     }
-    html_temporal = pio.to_html(fig_temporal, validate=False, include_plotlyjs='cdn', config=config_temporal)
-    add_card(q, 'temporal1', ui.form_card(box=ui.box('horizontal', width='750px'), title='', items=[
-        ui.frame(content=html_temporal, height='650px', width='650px')]))
-
-    # Create a grouped bar chart for industry representation
-    fig_industry = px.histogram(df, x='date', color='Industry sector', nbins=30,
-                                 labels={'date': 'Date', 'count': 'Number of Articles', 'Industry sector': 'Industry'})
-    fig_industry.update_layout(title='Industry Representation Over Time', xaxis_title='Date', yaxis_title='Number of Articles')
-    config_industry = {
-        'scrollZoom': False,
-        'showLink': False,
-        'displayModeBar': False
-    }
-    html_industry = pio.to_html(fig_industry, validate=False, include_plotlyjs='cdn', config=config_industry)
-    add_card(q, 'industry1', ui.form_card(box=ui.box('vertical', width='1500px'), title='', items=[
-        ui.frame(content=html_industry, height='650px', width='1500px')]))
-
+    html = pio.to_html(fig2, validate=False, include_plotlyjs='cdn', config=config)
+    add_card(q, 'corr1', ui.form_card(box=ui.box('vertical', width='1500px'), title='', items=[
+        ui.frame(content=html, height='650px', width='1500px')]))
     
 
 
@@ -271,10 +275,10 @@ async def page_temporal(q: Q):
 
 
 
-@on('#ind-sub-analysis')
+@on('#driver-behaviour-analysis')
 @on('page4_reset')
 async def page4(q: Q):
-    q.page['sidebar'].value = '#ind-sub-analysis'
+    q.page['sidebar'].value = '#driver-behaviour-analysis'
     # When routing, drop all the cards except of the main ones (header, sidebar, meta).
     # Since this page is interactive, we want to update its card
     # instead of recreating it every time, so ignore 'form' card on drop.
@@ -282,24 +286,27 @@ async def page4(q: Q):
 
     # Now df_expanded has each industry on a separate row
 
+    # Group the data by alert type and count the occurrences of each alert
     
+    df_temp = df.copy()
+    alert_counts = df_temp['Alert'].value_counts().reset_index()
+    alert_counts.columns = ['Alert', 'Frequency']
 
-    # Plot Industry Distribution
-    fig_industry = px.bar(industry_distribution, x='Industry', y='Count', title='Distribution of News Across Industries')
-    fig_industry.update_layout(xaxis_title='Industry', yaxis_title='Number of Articles')
-    fig_industry.update_traces(width=2)
+
+    # Create a pie chart of alert frequencies
+    fig = px.pie(alert_counts, values='Frequency', names='Alert', title='Distribution of Driver Alerts')
     config = {
         'scrollZoom': False,
         'showLink': False,
         'displayModeBar': False
     }
-    html = pio.to_html(fig_industry, validate=False, include_plotlyjs='cdn', config=config)
-    add_card(q, 'ind1', ui.form_card(box=ui.box('horizontal',width='1500px'), title='', items=[
-        ui.frame(content=html, height='1000px',width='1500px')]))
+    html = pio.to_html(fig, validate=False, include_plotlyjs='cdn', config=config)
+    add_card(q, 'corr1', ui.form_card(box=ui.box('vertical', width='1500px'), title='', items=[
+        ui.frame(content=html, height='650px', width='1500px')]))
 
-@on('#target-audience-analysis')
+@on('#safety-impact-analysis')
 async def page_target_aud(q: Q):
-    q.page['sidebar'].value = '#target-audience-analysis'
+    q.page['sidebar'].value = '#safety-impact-analysis'
     # When routing, drop all the cards except of the main ones (header, sidebar, meta).
     # Since this page is interactive, we want to update its card
     # instead of recreating it every time, so ignore 'form' card on drop.
@@ -308,53 +315,34 @@ async def page_target_aud(q: Q):
     
 
 
-    # Plot Target Audience Distribution
-    fig_target_audience = px.bar(target_audience_distribution, x='Target Audience', y='Count', title='Target Audience Analysis')
+    safety_df = df[(df['Alert'] == 'cas_ldw') | (df['Alert'] == 'cas_hmw') | (df['Alert'] == 'hard_brake') |
+               (df['Alert'] == 'cas_pcw') | (df['Alert'] == 'cas_fcw')]
 
-    # Increase bar width if needed
-    fig_target_audience.update_layout(yaxis_range=[0, 100])
-    fig_target_audience.update_traces(width=3)
-
+    fig1 = px.scatter(safety_df.groupby('Speed')['Alert'].count().reset_index(), x='Speed', y='Alert',
+                    title='Speed vs. Frequency of Safety-Related Alerts', trendline='ols')
+    fig1.update_layout(xaxis_title='Speed', yaxis_title='Frequency of Safety Alerts')
 
     config = {
         'scrollZoom': False,
         'showLink': False,
         'displayModeBar': False
     }
-    html = pio.to_html(fig_target_audience, validate=False, include_plotlyjs='cdn', config=config)
-    add_card(q, 'aud1', ui.form_card(box=ui.box('horizontal',width='1500px'), title='', items=[
-        ui.frame(content=html, height='1000px',width='1500px')]))
-
+    html = pio.to_html(fig1, validate=False, include_plotlyjs='cdn', config=config)
+    add_card(q, 'safe1', ui.form_card(box=ui.box('vertical', width='1500px'), title='', items=[
+        ui.frame(content=html, height='650px', width='1500px')]))
+    # Box plot comparing speeds during safety-related alert events vs non-alert events
+    fig2 = px.box(safety_df, x='Alert', y='Speed', title='Speed Distribution During Safety Alerts')
+    fig2.update_layout(xaxis_title='Alert Type', yaxis_title='Speed')
+    config = {
+        'scrollZoom': False,
+        'showLink': False,
+        'displayModeBar': False
+    }
+    html = pio.to_html(fig2, validate=False, include_plotlyjs='cdn', config=config)
+    add_card(q, 'safe2', ui.form_card(box=ui.box('vertical', width='1500px'), title='', items=[
+        ui.frame(content=html, height='650px', width='1500px')]))
     
 
-@on('#competitor-analysis')
-async def page_comp(q: Q):
-    q.page['sidebar'].value = '#competitor-analysis'
-    # When routing, drop all the cards except of the main ones (header, sidebar, meta).
-    # Since this page is interactive, we want to update its card
-    # instead of recreating it every time, so ignore 'form' card on drop.
-    clear_cards(q)
-
-@on('#salary-analysis')
-async def page_salary(q: Q):
-    q.page['sidebar'].value = '#salary-analysis'
-    # When routing, drop all the cards except of the main ones (header, sidebar, meta).
-    # Since this page is interactive, we want to update its card
-    # instead of recreating it every time, so ignore 'form' card on drop.
-    clear_cards(q)
-
-@on('#cross-industry-analysis')
-async def page_cross(q: Q):
-    q.page['sidebar'].value = '#cross-industry-analysis'
-    # When routing, drop all the cards except of the main ones (header, sidebar, meta).
-    # Since this page is interactive, we want to update its card
-    # instead of recreating it every time, so ignore 'form' card on drop.
-    clear_cards(q)
-
-def plot_categorical_graph(df, selected_column):
-    # Assuming data is present in a column named 'data'
-    fig = px.histogram(df, x=selected_column, title=f'Distribution of {selected_column}')
-    return fig
 
 
 
@@ -425,7 +413,6 @@ async def init(q: Q) -> None:
                 ui.nav_item(name='#speed-analysis', label='Speed Analysis'),
                 ui.nav_item(name='#correlation-analysis', label='Correlation Analysis'),
                 ui.nav_item(name='#driver-behaviour-analysis', label='Driver Behaviour Analysis'),
-                ui.nav_item(name='#comparitive-analysis',label='Comparitive Analysis'),
                 ui.nav_item(name='#safety-impact-analysis',label='Safety Impact Analysis'),
                 
             ]),
