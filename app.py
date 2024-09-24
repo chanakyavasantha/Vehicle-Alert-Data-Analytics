@@ -9,8 +9,8 @@ from plotly import io as pio
 import plotly.figure_factory as ff
 
 
-df = pd.read_csv('static/iraste_nxt_cas.csv')
-df1 = pd.read_csv('static/iraste_nxt_casdms.csv')
+df = pd.read_csv('data/iraste_nxt_cas.csv')
+df1 = pd.read_csv('data/iraste_nxt_casdms.csv')
 df = pd.concat([df, df1], axis = 0)
 df = df.drop_duplicates()
 df = df.dropna()
@@ -347,7 +347,6 @@ async def page_target_aud(q: Q):
 
 
 
-    
 
 
 
